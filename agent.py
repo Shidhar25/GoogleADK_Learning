@@ -1,103 +1,89 @@
 from google.adk.agents.llm_agent import Agent
 from google.adk.agents.sequential_agent import SequentialAgent
-from google.adk.agents.loop_agent import LoopAgent
-from .tools import get_current_time, get_current_weather, get_google_search, get_pdf_content, generate_quiz
-from google.adk.tools.google_search_tool import google_search
-from google.adk.tools.exit_loop_tool import exit_loop
+from google.adk.models.lite_llm import LiteLlm
+from .tools import get_time, get_weather, generate_quiz, get_google_search
+import os
+from .langchain_pdf_tool import extract_pdf_with_langchain
+from google.adk.agents.parallel_agent import ParallelAgent
+# 1. Define Model First
+model = LiteLlm(
+    api_key=os.getenv("GROQ_API_KEY"),
+    model = "groq/llama-3.3-70b-versatile"
+)
 
+# ...
+
+# --- PDF Agent (LangChain) ---
+pdf_agent = Agent(
+    name="PdfReaderAgent",
+    model=model,
+    instruction="If the user provides a PDF path, use process_user_pdf to store and read it.",
+    tools=[extract_pdf_with_langchain]
+)
+
+# --- Quiz Agent ---
 quiz_agent = Agent(
     name="QuizGeneratorAgent",
-    model="gemini-2.5-flash-lite",
+    model=model,
     instruction="""
-    You receive a paragraph.
-    
-    Rules:
-    - Use the generate_quiz tool.
-    - Do NOT explain anything.
-    - Do NOT add text outside the tool result.
+    You receive text.
+    Use generate_quiz to create a quiz from it.
+    Do NOT explain.
     """,
     tools=[generate_quiz]
 )
+
+# --- City/Time/Weather Agents ---
 city_agent = Agent(
     name="CityExtractorAgent",
-    model="gemini-2.5-flash-lite",
-    instruction="Extract the city name. Output ONLY the city."
+    model=model,
+    instruction="Extract the city name only. Do NOT call any tools. Just output the city name as text."
 )
 
 time_agent = Agent(
     name="TimeFetcherAgent",
-    model="gemini-2.5-flash-lite",
-    instruction="Use get_current_time for the city.",
-    tools=[get_current_time]
+    model=model,
+    instruction="Use get_time for the city.",
+    tools=[get_time]
 )
 
 weather_agent = Agent(
     name="WeatherFetcherAgent",
-    model="gemini-2.5-flash-lite",
-    instruction="Use get_current_weather for the city.",
-    tools=[get_current_weather]
+    model=model,
+    instruction="Use get_weather for the city.",
+    tools=[get_weather]
 )
 
-pdf_agent = Agent(
-    name="PdfReaderAgent",
-    model="gemini-2.5-flash-lite",
-    instruction="""
-    If a PDF path is provided in the input, use get_pdf_content to read it.
-    Answer user questions based on the PDF content.
-    If no PDF path, pass.
-    """,
-    tools=[get_pdf_content]
-)
-
-
+# --- Search Agents ---
 search_agent = Agent(
     name="SearchAgent",
-    model="gemini-2.5-flash-lite", 
-    instruction="""
-    Search the web for the given query and return a factual answer.
-    """,
-    tools=[google_search]
+    model=model,
+    instruction="Search and return facts.",
+    tools=[get_google_search]
 )
 
-evaluator_agent = Agent(
-    name="EvaluatorAgent",
-    model="gemini-2.5-flash-lite",
-    instruction="""
-    Analyze the search results.
-    If they satisfactorily answer the user's request, call exit_loop.
-    If not, suggest a refined search query.
-    """,
-    tools=[exit_loop]
-)
-
-research_loop = LoopAgent(
-    name="ResearchLoop",
-    sub_agents=[search_agent, evaluator_agent],
-    max_iterations=3
-)
+# --- Unused Agents Removed ---
 
 response_agent = Agent(
     name="ResponseAgent",
-    model="gemini-2.5-flash-lite",
-    instruction="""
-    You receive city, time, weather, search info, and PDF content.
-    Respond politely in ONE sentence.
-
-    Example:
-    The current time in Mumbai is 10:30 AM, the weather is Sunny.
-    """
+    model=model,
+    instruction="Respond in one clear sentence."
 )
 
-time_workflow = SequentialAgent(
-    name="TimeSequentialWorkflow",
-    description="City → Weather → Time → Search → Response",
+# 3. Define Workflow (A2A)
+# We combine them into a sequential workflow.
+# This represents the "Multi AI agent A2A" system.
+# 3. Define Workflow (A2A)
+# We combine them into a sequential workflow.
+# This represents the "Multi AI agent A2A" system.
+multi_agent_workflow = SequentialAgent(
+    name="MultiAgentA2AWorkflow",
     sub_agents=[
-        quiz_agent,
-        city_agent,
-        weather_agent,
-        time_agent,
-        research_loop,
-        pdf_agent,
-        response_agent
+        pdf_agent,       # 1. Read PDF (if any)
+        quiz_agent,      # 2. Generate Quiz from text/pdf
+        city_agent,      # 3. Extract City (from extra context?)
+        weather_agent,   # 4. Get Weather
+        time_agent,      # 5. Get Time
+        # response_agent   # 6. Final Response
     ]
 )

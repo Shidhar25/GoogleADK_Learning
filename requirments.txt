@@ -1,0 +1,6 @@
+chromadb
+LiteLlm
+google-cloud-aiplatform
+langchain
+langchain-community
+pypdf

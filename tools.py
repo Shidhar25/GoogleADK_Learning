@@ -50,21 +50,33 @@ def generate_quiz(input: QuizInput) -> QuizOutput:
         questions=questions,
         status="success"
     )
-def get_current_time(city: str) -> dict:
-    return {"city": city, "time": "10:30 AM"}
+# --- Simple Tools Inputs ---
+class CityInput(BaseModel):
+    city: str = Field(..., description="City name")
 
-def get_current_weather(city: str) -> dict:
-    return {"city": city, "weather": "Sunny"}
+class SearchInput(BaseModel):
+    query: str = Field(..., description="Search query")
 
-def get_google_search(query: str) -> dict:
-    return {"query": query, "results": ["Result 1", "Result 2"]}
+# --- Simple Tools ---
+def get_time(input: CityInput) -> dict:
+    return {"city": input.city, "time": "10:30 AM"}
 
-def get_pdf_content(file_path: str) -> dict:
+def get_weather(input: CityInput) -> dict:
+    return {"city": input.city, "weather": "Sunny"}
+
+def get_google_search(input: SearchInput) -> dict:
+    return {"query": input.query, "results": ["Result 1", "Result 2"]}
+
+class PdfInput(BaseModel):
+    file_path: str = Field(..., description="Path to PDF")
+
+def get_pdf_content(input: PdfInput) -> dict:
     try:
-        reader = PdfReader(file_path)
+        reader = PdfReader(input.file_path)
         text = ""
         for page in reader.pages:
             text += page.extract_text()
         return {"content": text[:10000]}  # Limit to first 10k characters
     except Exception as e:
         return {"error": str(e)}
+

@@ -1,1 +1,1 @@
-from .agent import time_workflow as root_agent
+from .agent import multi_agent_workflow as root_agent
